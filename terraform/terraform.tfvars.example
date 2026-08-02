@@ -1,0 +1,11 @@
+region           = "us-east-1"
+jira_project_key  = "OPS"
+jira_secret_arn   = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-jira/creds-XXXX"
+default_priority  = "Low"
+done_transition   = "Done"
+
+priority_map = {
+  AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED = "High"
+}
+
+event_type_categories = ["scheduledChange"]
