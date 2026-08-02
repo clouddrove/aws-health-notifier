@@ -1,8 +1,9 @@
 import json
+from typing import Any
 
 from handler import config, events
 
-RAW = {
+RAW: dict[str, Any] = {
     "detail-type": "AWS Health Event",
     "source": "aws.health",
     "account": "111122223333",
@@ -35,6 +36,33 @@ def test_parse_extracts_fields():
 def test_parse_ignores_non_ec2():
     raw = {**RAW, "detail": {**RAW["detail"], "service": "RDS"}}
     assert events.parse(raw) is None
+
+
+def test_parse_ignores_non_health_source():
+    raw = {**RAW, "source": "aws.ec2"}
+    assert events.parse(raw) is None
+
+
+def test_missing_status_code_defaults_open_not_closed():
+    detail = {k: v for k, v in RAW["detail"].items() if k != "statusCode"}
+    ev = events.parse({**RAW, "detail": detail})
+    assert ev is not None
+    assert ev.status_code == "open"
+    assert ev.is_closed is False
+
+
+def test_is_closed_case_insensitive():
+    for code in ("closed", "CLOSED", "resolved", "Resolved"):
+        detail = {**RAW["detail"], "statusCode": code}
+        ev = events.parse({**RAW, "detail": detail})
+        assert ev is not None and ev.is_closed is True
+
+
+def test_blank_entity_values_dropped():
+    detail = {**RAW["detail"], "affectedEntities": [{"entityValue": "i-0abc123"}, {}]}
+    ev = events.parse({**RAW, "detail": detail})
+    assert ev is not None
+    assert ev.entities == ["i-0abc123"]
 
 
 def test_config_priority_map(monkeypatch):

@@ -31,10 +31,14 @@ def parse(raw: dict[str, Any]) -> HealthEvent | None:
         return None
     descriptions = detail.get("eventDescription", [])
     description = descriptions[0].get("latestDescription", "") if descriptions else ""
-    entities = [e.get("entityValue", "") for e in detail.get("affectedEntities", [])]
+    entities = [
+        value for e in detail.get("affectedEntities", []) if (value := e.get("entityValue"))
+    ]
     return HealthEvent(
         event_arn=detail["eventArn"],
         event_type_code=detail.get("eventTypeCode", ""),
+        # AWS Health always sends statusCode; default to "open" only as a safe
+        # fallback so a malformed event is treated as active, never auto-closed.
         status_code=detail.get("statusCode", "open"),
         account=raw.get("account", ""),
         region=raw.get("region", ""),
