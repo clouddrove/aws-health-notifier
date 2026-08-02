@@ -45,7 +45,7 @@ def test_put_stores_int_ttl(table: StateStore) -> None:
     table.put_if_absent("arn1", "OPS-1")
     raw = boto3.resource("dynamodb", region_name="us-east-1").Table(TABLE)
     item = raw.get_item(Key={"eventArn": "arn1"})["Item"]
-    assert item["ttl"] > item["updatedAt"]
+    assert int(str(item["ttl"])) > int(str(item["updatedAt"]))
 
 
 def test_client_error_other_than_condition_reraises(table: StateStore) -> None:
