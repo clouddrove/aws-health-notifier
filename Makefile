@@ -15,8 +15,8 @@ test:
 
 package:
 	rm -rf build dist && mkdir -p dist build
-	cp -r src/handler/* build/
-	cd build && zip -r ../dist/handler.zip . -x '*.pyc' '__pycache__/*'
+	cp -r src/handler build/handler
+	cd build && zip -r ../dist/handler.zip handler -x '*.pyc' '*/__pycache__/*'
 
 tf-validate:
 	terraform -chdir=terraform fmt -check
