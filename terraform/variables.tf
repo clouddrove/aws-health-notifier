@@ -7,7 +7,13 @@ variable "region" {
 variable "name_prefix" {
   description = "Prefix applied to all resource names."
   type        = string
-  default     = "aws-health-jira"
+  default     = "aws-health-notifier"
+}
+
+variable "notifier" {
+  description = "Notifier backend that receives events (jira today)."
+  type        = string
+  default     = "jira"
 }
 
 variable "jira_project_key" {

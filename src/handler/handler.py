@@ -4,8 +4,7 @@ import json
 import logging
 from typing import Any
 
-from . import config, enrich, events, secrets
-from .jira import JiraClient
+from . import config, events, notifiers
 from .state import StateStore
 
 log = logging.getLogger()
@@ -23,8 +22,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
         return {"status": "ignored"}
 
     cfg = config.load()
-    creds = secrets.load_jira(cfg.secret_arn)
-    jira = JiraClient(creds["base_url"], creds["email"], creds["api_token"])
+    notifier = notifiers.build(cfg)
     store = StateStore(cfg.table_name)
 
     if ev.is_closed:
@@ -32,21 +30,20 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
         if record is None:
             _log("ignored", ev.event_arn, reason="closed-untracked")
             return {"status": "ignored"}
-        issue_key, status = record
+        ref, status = record
         if status == "closed":
             # Already closed on a prior delivery; skip to stay idempotent and
             # avoid duplicate resolution comments on redelivery.
-            _log("deduped", ev.event_arn, issueKey=issue_key, reason="already-closed")
+            _log("deduped", ev.event_arn, ref=ref, reason="already-closed")
             return {"status": "deduped"}
-        jira.add_comment(issue_key, "AWS Health event resolved. Closing.")
-        jira.transition(issue_key, cfg.done_transition)
+        notifier.close(ref, cfg)
         store.mark_closed(ev.event_arn)
-        _log("closed", ev.event_arn, issueKey=issue_key)
+        _log("closed", ev.event_arn, ref=ref)
         return {"status": "closed"}
 
     existing = store.get_issue_key(ev.event_arn)
     if existing is not None:
-        _log("deduped", ev.event_arn, issueKey=existing)
+        _log("deduped", ev.event_arn, ref=existing)
         return {"status": "deduped"}
 
     # Create-then-store: the ticket is created before the state write. If the
@@ -56,15 +53,9 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     # events are low volume, so a rare duplicate is cheaper than a two-phase
     # write. The conditional put still guards the common concurrent-redelivery
     # race below.
-    issue_key = jira.create_issue(
-        cfg.project_key,
-        cfg.issue_type,
-        enrich.summary(ev),
-        enrich.description(ev),
-        enrich.priority(cfg, ev),
-    )
-    if not store.put_if_absent(ev.event_arn, issue_key):
-        _log("deduped", ev.event_arn, issueKey=issue_key, reason="race")
+    ref = notifier.open(ev, cfg)
+    if not store.put_if_absent(ev.event_arn, ref):
+        _log("deduped", ev.event_arn, ref=ref, reason="race")
         return {"status": "deduped"}
-    _log("created", ev.event_arn, issueKey=issue_key)
+    _log("created", ev.event_arn, ref=ref)
     return {"status": "created"}

@@ -1,13 +1,13 @@
 [project]
-name = "aws-health-jira"
+name = "aws-health-notifier"
 version = "0.1.0"
+description = "Turn AWS Health EC2 scheduled events into tickets in a pluggable notifier (Jira today)."
 requires-python = ">=3.13"
 
 [dependency-groups]
 dev = [
     "pytest",
     "moto[dynamodb,secretsmanager]",
-    "responses",
     "ruff",
     "mypy",
     "boto3",

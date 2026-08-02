@@ -5,7 +5,14 @@ from handler.config import Config
 from handler.events import HealthEvent
 
 CFG = Config(
-    "OPS", "Task", "Low", {"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"}, "t", "arn", "Done"
+    "jira",
+    "OPS",
+    "Task",
+    "Low",
+    {"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"},
+    "t",
+    "arn",
+    "Done",
 )
 EV = HealthEvent(
     "arn:...abc",

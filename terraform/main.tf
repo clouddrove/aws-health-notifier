@@ -114,6 +114,7 @@ resource "aws_lambda_function" "handler" {
 
   environment {
     variables = {
+      NOTIFIER          = var.notifier
       JIRA_PROJECT_KEY  = var.jira_project_key
       JIRA_ISSUE_TYPE   = var.jira_issue_type
       DEFAULT_PRIORITY  = var.default_priority
