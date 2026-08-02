@@ -1,6 +1,7 @@
 region           = "us-east-1"
+notifier          = "jira"
 jira_project_key  = "OPS"
-jira_secret_arn   = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-jira/creds-XXXX"
+jira_secret_arn   = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/creds-XXXX"
 default_priority  = "Low"
 done_transition   = "Done"
 
