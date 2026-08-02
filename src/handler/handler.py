@@ -19,7 +19,7 @@ def _log(status: str, event_arn: str, **extra: object) -> None:
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     ev = events.parse(event)
     if ev is None:
-        _log("ignored", event.get("detail", {}).get("eventArn", ""))
+        _log("ignored", event.get("detail", {}).get("eventArn") or "unknown")
         return {"status": "ignored"}
 
     cfg = config.load()
@@ -43,6 +43,13 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
         _log("deduped", ev.event_arn, issueKey=existing)
         return {"status": "deduped"}
 
+    # Create-then-store: the ticket is created before the state write. If the
+    # state write raises a transient error the exception propagates and the
+    # event is retried, which can create a second ticket for the same eventArn.
+    # Accepted tradeoff: dedup is best-effort via put_if_absent, and Health
+    # events are low volume, so a rare duplicate is cheaper than a two-phase
+    # write. The conditional put still guards the common concurrent-redelivery
+    # race below.
     issue_key = jira.create_issue(
         cfg.project_key,
         cfg.issue_type,
