@@ -28,10 +28,16 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     store = StateStore(cfg.table_name)
 
     if ev.is_closed:
-        issue_key = store.get_issue_key(ev.event_arn)
-        if issue_key is None:
+        record = store.get_record(ev.event_arn)
+        if record is None:
             _log("ignored", ev.event_arn, reason="closed-untracked")
             return {"status": "ignored"}
+        issue_key, status = record
+        if status == "closed":
+            # Already closed on a prior delivery; skip to stay idempotent and
+            # avoid duplicate resolution comments on redelivery.
+            _log("deduped", ev.event_arn, issueKey=issue_key, reason="already-closed")
+            return {"status": "deduped"}
         jira.add_comment(issue_key, "AWS Health event resolved. Closing.")
         jira.transition(issue_key, cfg.done_transition)
         store.mark_closed(ev.event_arn)

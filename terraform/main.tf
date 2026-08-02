@@ -9,7 +9,7 @@ provider "aws" {
   }
 }
 
-# --- DynamoDB application state (dedup + lifecycle) ---
+# DynamoDB application state (dedup + lifecycle)
 resource "aws_dynamodb_table" "state" {
   name         = "${var.name_prefix}-state"
   billing_mode = "PAY_PER_REQUEST"
@@ -34,14 +34,14 @@ resource "aws_dynamodb_table" "state" {
   }
 }
 
-# --- Dead letter queue for failed async invocations ---
+# Dead letter queue for failed async invocations
 resource "aws_sqs_queue" "dlq" {
   name                      = "${var.name_prefix}-dlq"
   message_retention_seconds = 1209600
   sqs_managed_sse_enabled   = true
 }
 
-# --- IAM role and least-privilege policy ---
+# IAM role and least-privilege policy
 data "aws_iam_policy_document" "assume" {
   statement {
     actions = ["sts:AssumeRole"]
@@ -94,7 +94,7 @@ resource "aws_iam_role_policy" "lambda" {
   policy = data.aws_iam_policy_document.lambda.json
 }
 
-# --- Lambda ---
+# Lambda
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.name_prefix}"
   retention_in_days = var.log_retention_days
@@ -135,7 +135,7 @@ resource "aws_lambda_function" "handler" {
   depends_on = [aws_cloudwatch_log_group.lambda]
 }
 
-# --- EventBridge rule for org-wide AWS Health EC2 events ---
+# EventBridge rule for org-wide AWS Health EC2 events
 resource "aws_cloudwatch_event_rule" "health" {
   name        = "${var.name_prefix}-rule"
   description = "Capture AWS Health EC2 scheduled-change events."

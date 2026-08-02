@@ -111,6 +111,16 @@ def test_closed_event_transitions(env: _Jira) -> None:
     assert any(p.endswith("/OPS-1/transitions") for p in paths)
 
 
+def test_closed_event_redelivery_is_idempotent(env: _Jira) -> None:
+    handler.lambda_handler(OPEN_EVENT, None)
+    closed = {**OPEN_EVENT, "detail": {**OPEN_EVENT["detail"], "statusCode": "closed"}}
+    assert handler.lambda_handler(closed, None)["status"] == "closed"
+    before = len([r for r in env.requests if r.full_url.endswith("/OPS-1/comment")])
+    assert handler.lambda_handler(closed, None)["status"] == "deduped"
+    after = len([r for r in env.requests if r.full_url.endswith("/OPS-1/comment")])
+    assert after == before  # no duplicate resolution comment on redelivery
+
+
 def test_closed_untracked_ignored(env: _Jira) -> None:
     closed = {**OPEN_EVENT, "detail": {**OPEN_EVENT["detail"], "statusCode": "closed"}}
     assert handler.lambda_handler(closed, None)["status"] == "ignored"

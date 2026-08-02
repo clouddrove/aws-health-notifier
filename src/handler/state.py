@@ -35,6 +35,13 @@ class StateStore:
         item = self._table.get_item(Key={"eventArn": event_arn}).get("Item")
         return str(item["issueKey"]) if item else None
 
+    def get_record(self, event_arn: str) -> tuple[str, str] | None:
+        """Return (issue_key, status) for a tracked event, or None if unseen."""
+        item = self._table.get_item(Key={"eventArn": event_arn}).get("Item")
+        if not item:
+            return None
+        return str(item["issueKey"]), str(item["status"])
+
     def mark_closed(self, event_arn: str) -> None:
         self._table.update_item(
             Key={"eventArn": event_arn},
