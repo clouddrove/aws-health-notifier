@@ -8,7 +8,9 @@ from typing import Any
 
 
 class JiraError(RuntimeError):
-    pass
+    def __init__(self, message: str, status: int | None = None) -> None:
+        super().__init__(message)
+        self.status = status
 
 
 class JiraClient:
@@ -31,7 +33,11 @@ class JiraClient:
                 result: dict[str, Any] = json.loads(body) if body else {}
                 return result
         except urllib.error.HTTPError as exc:
-            raise JiraError(f"{method} {path} -> {exc.code}: {exc.read().decode()}") from exc
+            raise JiraError(
+                f"{method} {path} -> {exc.code}: {exc.read().decode()}", status=exc.code
+            ) from exc
+        except urllib.error.URLError as exc:
+            raise JiraError(f"{method} {path} -> network error: {exc.reason}") from exc
 
     def create_issue(
         self,
