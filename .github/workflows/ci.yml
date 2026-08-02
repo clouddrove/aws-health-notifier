@@ -1,24 +1,47 @@
 name: ci
-on: [push, pull_request]
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
 jobs:
-  build:
+  python:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install ruff mypy pytest "moto[dynamodb,secretsmanager]" responses boto3 "boto3-stubs[dynamodb,secretsmanager]"
-      - run: ruff check .
-      - run: ruff format --check .
-      - run: mypy
-      - run: pytest -v
+      - run: pip install ruff mypy pytest "moto[dynamodb,secretsmanager]" boto3 "boto3-stubs[dynamodb,secretsmanager]"
+      - name: Lint
+        run: |
+          ruff check .
+          ruff format --check .
+      - name: Type check
+        run: mypy
+      - name: Test
+        run: pytest -v
+      - name: Package and verify Lambda import
+        run: |
+          make package
+          python -c "import zipfile,sys; zipfile.ZipFile('dist/handler.zip').extractall('.pkg'); sys.path.insert(0,'.pkg'); import handler.handler; print('lambda entrypoint import OK')"
+
+  terraform:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
       - uses: hashicorp/setup-terraform@v3
       - run: terraform -chdir=terraform fmt -check
       - run: terraform -chdir=terraform init -backend=false
       - run: terraform -chdir=terraform validate
       - uses: terraform-linters/setup-tflint@v4
-      - run: tflint --chdir=terraform --init && tflint --chdir=terraform
-      - uses: bridgecrewio/checkov-action@master
+      - run: tflint --chdir=terraform --init
+      - run: tflint --chdir=terraform
+      - name: Checkov
+        uses: bridgecrewio/checkov-action@v12.1347.0
         with:
           directory: terraform

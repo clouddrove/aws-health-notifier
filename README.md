@@ -1,8 +1,17 @@
-# AWS Health to Jira Ticket Automation
+# aws-health-notifier
 
-Automatically create, dedup, and auto-close Jira Cloud tickets from AWS Health
-EC2 scheduled-change events across an AWS Organization. Deployed entirely by
-Terraform.
+Turn AWS Health EC2 scheduled events (maintenance, retirement, reboots) into
+tracked tickets, automatically, across an AWS Organization. Jira Cloud is the
+first notifier; the sink is pluggable, so Slack or PagerDuty can be added later
+without touching the core.
+
+## Why not the AWS Service Management Connector
+
+The Atlassian connector needs a paid Jira Service Management tier and gives no
+enrichment, no dedup, and no auto-close. This talks to the Jira REST API
+directly from a small Lambda: it works with any Jira Cloud project, enriches the
+ticket, dedups, and closes the ticket when the event resolves. Running cost is
+about $0.40/month.
 
 ## Architecture
 
@@ -12,36 +21,59 @@ Member accounts ──(AWS Health org events)──▶ Central Ops account
                              EventBridge rule (aws.health, service=EC2)
                                                 │
                                      Lambda (Python 3.13)
-                                     ├─ dedup / lifecycle ─▶ DynamoDB
+                                     ├─ dedup / lifecycle ─▶ DynamoDB (eventArn ▶ ref)
                                      ├─ enrich (event payload only)
                                      ├─ priority map
-                                     └─ Jira REST v3: create / comment / transition
+                                     └─ Notifier ─▶ Jira REST v3 (create / comment / transition)
                                                 │
                                      async failure ─▶ SQS DLQ
 ```
 
-See the design spec in `docs/superpowers/specs/` and the implementation plan in
-`docs/superpowers/plans/`.
+The Lambda is sink-agnostic. It calls a `Notifier` interface; `NOTIFIER=jira`
+selects the Jira implementation. Adding a sink is a new module under
+`src/handler/notifiers/` plus one branch in the factory.
+
+Lifecycle, driven by the Health `statusCode` and DynamoDB state:
+
+| Event state | Tracked in DynamoDB | Action |
+|---|---|---|
+| open / upcoming | no | create ticket, store `eventArn ▶ ref` |
+| open / upcoming | yes | dedup, no new ticket |
+| closed / resolved | yes, still open | comment + transition to Done, mark closed |
+| closed / resolved | yes, already closed | skip (idempotent) |
+| closed / resolved | no | ignore (never created a ticket) |
+
+## Repository layout
+
+```
+src/handler/
+  handler.py            Lambda entrypoint, sink-agnostic orchestration
+  config.py             env-driven configuration
+  events.py             parse AWS Health events
+  enrich.py             build ticket fields from the event payload (Jira ADF)
+  state.py              DynamoDB dedup + lifecycle
+  secrets.py            read the notifier secret
+  jira.py               low-level Jira Cloud REST v3 client
+  notifiers/
+    base.py             Notifier protocol
+    jira_notifier.py    Jira implementation
+    __init__.py         build(cfg) factory
+terraform/              EventBridge, Lambda, IAM, DynamoDB, SQS DLQ, S3 backend
+tests/                  pytest, moto (AWS), urllib mocking (Jira)
+.github/workflows/      ci.yml (checks) and deploy.yml (OIDC apply)
+```
 
 ## Prerequisites
 
-- An AWS account designated as the central operations account.
+- A central operations AWS account.
 - Terraform >= 1.10, AWS provider ~> 6.57.
 - A Jira Cloud project with permission to create issues, add comments, and
   transition issues.
 - An S3 bucket for Terraform state (native lockfile, no DynamoDB lock table).
 
-## Cost
-
-Around $0.40/month (Secrets Manager). EventBridge, Lambda, DynamoDB on-demand,
-and the SQS DLQ sit within free-tier usage at Health-event volume.
-
 ## Setup
 
 ### 1. Enable org-wide AWS Health (one time, management account)
-
-AWS Health organizational view surfaces member-account events on the central
-account bus. Register the central account as delegated administrator:
 
 ```bash
 aws organizations register-delegated-administrator \
@@ -49,9 +81,10 @@ aws organizations register-delegated-administrator \
   --service-principal health.amazonaws.com
 ```
 
-This is an organization-management action, run once outside Terraform.
+This is an organization-management action, run once outside Terraform. It makes
+member-account EC2 Health events surface on the central account event bus.
 
-### 2. Create the Jira secret (central account)
+### 2. Create the notifier secret (central account)
 
 Store Jira credentials in Secrets Manager as JSON:
 
@@ -65,39 +98,81 @@ Store Jira credentials in Secrets Manager as JSON:
 
 ```bash
 aws secretsmanager create-secret \
-  --name aws-health-jira/creds \
+  --name aws-health-notifier/creds \
   --secret-string file://jira-creds.json
 ```
 
 Note the returned ARN for `jira_secret_arn`.
 
-### 3. Package the Lambda
+### 3. Deploy
 
 ```bash
-make package   # produces dist/handler.zip
-```
-
-### 4. Deploy
-
-```bash
+make package        # builds dist/handler.zip
 cd terraform
 terraform init \
   -backend-config="bucket=<state-bucket>" \
-  -backend-config="key=aws-health-jira/terraform.tfstate" \
+  -backend-config="key=aws-health-notifier/terraform.tfstate" \
   -backend-config="region=<region>"
 terraform apply -var-file=terraform.tfvars
 ```
 
-See `terraform/terraform.tfvars.example` for variables.
+See `terraform/terraform.tfvars.example` for the variables.
+
+## GitHub Actions
+
+Everything runs in CI, and deploys can run from Actions too.
+
+- **`ci.yml`** (every push and PR): ruff lint + format check, mypy strict,
+  pytest, a package-and-import check on the Lambda zip, then terraform fmt,
+  validate, tflint, and checkov.
+- **`deploy.yml`** (push to `main`, or manual): builds the zip, assumes an AWS
+  role via GitHub OIDC (no static keys), and runs `terraform apply`.
+
+Configure these repo-level Actions variables for deploy:
+
+| Variable | Purpose |
+|---|---|
+| `AWS_DEPLOY_ROLE_ARN` | IAM role the workflow assumes via OIDC |
+| `AWS_REGION` | deployment region |
+| `TF_STATE_BUCKET` | S3 bucket holding Terraform state |
+| `JIRA_PROJECT_KEY` | Jira project for tickets |
+| `JIRA_SECRET_ARN` | ARN of the Secrets Manager secret from step 2 |
+
+The IAM role's trust policy must allow this repository's OIDC subject
+(`token.actions.githubusercontent.com`).
+
+## Configuration
+
+| Env var (Lambda) | Terraform variable | Default |
+|---|---|---|
+| `NOTIFIER` | `notifier` | `jira` |
+| `JIRA_PROJECT_KEY` | `jira_project_key` | required |
+| `JIRA_ISSUE_TYPE` | `jira_issue_type` | `Task` |
+| `DEFAULT_PRIORITY` | `default_priority` | `Low` |
+| `PRIORITY_MAP_JSON` | `priority_map` | retirement ▶ High |
+| `DONE_TRANSITION` | `done_transition` | `Done` |
+| `TABLE_NAME` | (set by Terraform) | - |
+| `SECRET_ARN` | `jira_secret_arn` | required |
 
 ## Development
 
 ```bash
-make lint      # ruff + mypy
-make test      # pytest (moto + responses, no AWS or Jira needed)
-make package   # build Lambda zip
-make tf-validate
+make lint        # ruff + mypy
+make test        # pytest (moto + urllib mocking, no AWS or Jira needed)
+make package     # build the Lambda zip
+make tf-validate # terraform fmt + tflint + checkov
 ```
 
-Docker image (`Dockerfile`) bundles the full dev/CI toolchain and is used by CI
-only; the Lambda itself ships as a zip.
+The `Dockerfile` bundles the full dev/CI toolchain. The Lambda itself ships as a
+zip, not a container.
+
+## Cost
+
+| Item | Monthly |
+|---|---|
+| EventBridge (AWS events) | $0 |
+| Lambda | ~$0 (free tier) |
+| DynamoDB on-demand | ~$0 |
+| SQS DLQ | ~$0 |
+| Secrets Manager | $0.40 |
+| **Total** | **~$0.40** |
