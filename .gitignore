@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+
+# Build artifacts
+build/
+dist/
+
+# Terraform
+terraform/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform/terraform.tfvars.example
+.terraform.lock.hcl
+
+# SDD scratch
+.superpowers/
+
+# OS
+.DS_Store

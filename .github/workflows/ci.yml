@@ -1,0 +1,24 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - run: pip install ruff mypy pytest "moto[dynamodb,secretsmanager]" responses boto3 "boto3-stubs[dynamodb,secretsmanager]"
+      - run: ruff check .
+      - run: ruff format --check .
+      - run: mypy
+      - run: pytest -v
+      - uses: hashicorp/setup-terraform@v3
+      - run: terraform -chdir=terraform fmt -check
+      - run: terraform -chdir=terraform init -backend=false
+      - run: terraform -chdir=terraform validate
+      - uses: terraform-linters/setup-tflint@v4
+      - run: tflint --chdir=terraform --init && tflint --chdir=terraform
+      - uses: bridgecrewio/checkov-action@master
+        with:
+          directory: terraform
