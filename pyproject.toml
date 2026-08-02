@@ -26,6 +26,14 @@ python_version = "3.13"
 strict = true
 files = ["src", "tests"]
 
+# Tests exercise runtime behavior, not type contracts. Keep src strict; relax
+# strictness on test modules (untyped fixtures, heterogeneous dict literals).
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disable_error_code = ["dict-item", "no-untyped-def"]
+
 [tool.pytest.ini_options]
 pythonpath = ["src"]
 testpaths = ["tests"]
