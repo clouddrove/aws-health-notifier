@@ -137,6 +137,7 @@ Configure these repo-level Actions variables for deploy:
 | `TF_STATE_BUCKET` | S3 bucket holding Terraform state |
 | `JIRA_PROJECT_KEY` | Jira project for tickets |
 | `JIRA_SECRET_ARN` | ARN of the Secrets Manager secret from step 2 |
+| `NOTIFIER` | optional, notifier backend, defaults to `jira` |
 
 The IAM role's trust policy must allow this repository's OIDC subject
 (`token.actions.githubusercontent.com`).
