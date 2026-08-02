@@ -36,3 +36,26 @@ def test_mark_closed(table: StateStore) -> None:
     table.put_if_absent("arn1", "OPS-1")
     table.mark_closed("arn1")
     assert table.get_issue_key("arn1") == "OPS-1"
+    raw = boto3.resource("dynamodb", region_name="us-east-1").Table(TABLE)
+    item = raw.get_item(Key={"eventArn": "arn1"})["Item"]
+    assert item["status"] == "closed"
+
+
+def test_put_stores_int_ttl(table: StateStore) -> None:
+    table.put_if_absent("arn1", "OPS-1")
+    raw = boto3.resource("dynamodb", region_name="us-east-1").Table(TABLE)
+    item = raw.get_item(Key={"eventArn": "arn1"})["Item"]
+    assert item["ttl"] > item["updatedAt"]
+
+
+def test_client_error_other_than_condition_reraises(table: StateStore) -> None:
+    from unittest.mock import patch
+
+    from botocore.exceptions import ClientError
+
+    err = ClientError({"Error": {"Code": "ProvisionedThroughputExceededException"}}, "PutItem")
+    with (
+        patch.object(table._table, "put_item", side_effect=err),  # noqa: SLF001
+        pytest.raises(ClientError),
+    ):
+        table.put_if_absent("arn2", "OPS-2")
