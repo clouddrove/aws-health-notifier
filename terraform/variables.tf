@@ -45,9 +45,15 @@ variable "done_transition" {
   default     = "Done"
 }
 
-variable "jira_secret_arn" {
-  description = "ARN of an existing Secrets Manager secret holding {base_url,email,api_token}."
+variable "secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the notifier credentials (Jira or GitHub JSON)."
   type        = string
+}
+
+variable "github_repo" {
+  description = "owner/repo for the GitHub Issues notifier (used when notifier = github)."
+  type        = string
+  default     = ""
 }
 
 variable "event_type_categories" {

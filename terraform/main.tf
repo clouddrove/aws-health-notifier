@@ -75,7 +75,7 @@ data "aws_iam_policy_document" "lambda" {
   statement {
     sid       = "Secret"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.jira_secret_arn]
+    resources = [var.secret_arn]
   }
   statement {
     sid       = "Dlq"
@@ -130,12 +130,13 @@ resource "aws_lambda_function" "handler" {
   environment {
     variables = {
       NOTIFIER          = var.notifier
+      GITHUB_REPO       = var.github_repo
       JIRA_PROJECT_KEY  = var.jira_project_key
       JIRA_ISSUE_TYPE   = var.jira_issue_type
       DEFAULT_PRIORITY  = var.default_priority
       PRIORITY_MAP_JSON = jsonencode(var.priority_map)
       TABLE_NAME        = aws_dynamodb_table.state.name
-      SECRET_ARN        = var.jira_secret_arn
+      SECRET_ARN        = var.secret_arn
       DONE_TRANSITION   = var.done_transition
     }
   }
