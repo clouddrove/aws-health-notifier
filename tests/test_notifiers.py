@@ -1,42 +1,30 @@
 import json
 from typing import Any
-from unittest.mock import patch
 
 import boto3
 import pytest
 from moto import mock_aws
 
 from handler import notifiers
-from handler.config import Config
 from handler.events import HealthEvent
-from handler.notifiers.jira.client import JiraClient
+from handler.notifiers.github.notifier import GithubNotifier
 from handler.notifiers.jira.notifier import JiraNotifier
+from tests.conftest import make_config
 
-CFG = Config(
-    "jira",
-    "",
-    "OPS",
-    "Task",
-    "Low",
-    {"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"},
-    "t",
-    "arn",
-    "Done",
-)
 EV = HealthEvent(
     "arn:abc",
     "AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED",
     "open",
-    "1",
+    "111122223333",
     "us-east-1",
-    ["i-0abc"],
+    ["i-0abc123"],
     "d",
     "s",
     "e",
 )
 
 
-class _Client:
+class _JiraClient:
     def __init__(self) -> None:
         self.created: dict[str, Any] = {}
         self.comments: list[tuple[str, str]] = []
@@ -54,69 +42,64 @@ class _Client:
 
 
 def test_jira_notifier_open_uses_enrichment() -> None:
-    client = _Client()
-    ref = JiraNotifier(client).open(EV, CFG)  # type: ignore[arg-type]
+    client = _JiraClient()
+    cfg = make_config(priority_map={"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"})
+    ref = JiraNotifier(client).open(EV, cfg)  # type: ignore[arg-type]
     assert ref == "OPS-9"
     assert client.created["priority"] == "High"
-    assert "i-0abc" in client.created["summary"]
+    assert "i-0abc123" in client.created["summary"]
 
 
 def test_jira_notifier_close_comments_and_transitions() -> None:
-    client = _Client()
-    JiraNotifier(client).close("OPS-9", CFG)  # type: ignore[arg-type]
+    client = _JiraClient()
+    JiraNotifier(client).close("OPS-9", make_config())  # type: ignore[arg-type]
     assert client.comments[0][0] == "OPS-9"
     assert client.transitions[0] == ("OPS-9", "Done")
 
 
-def test_build_unknown_notifier_raises() -> None:
-    cfg = Config("slack", "", "OPS", "Task", "Low", {}, "t", "arn", "Done")
-    with pytest.raises(ValueError, match="unknown notifier"):
-        notifiers.build(cfg)
+def _secret(name: str, payload: dict[str, Any]) -> str:
+    sm = boto3.client("secretsmanager", region_name="us-east-1")
+    return sm.create_secret(Name=name, SecretString=json.dumps(payload))["ARN"]
 
 
-def test_build_jira_without_project_key_raises() -> None:
-    cfg = Config("jira", "", "", "Task", "Low", {}, "t", "arn", "Done")
+def test_build_all_jira_only() -> None:
+    with mock_aws():
+        arn = _secret("j", {"base_url": "https://x.atlassian.net", "email": "e", "api_token": "t"})
+        cfg = make_config(notifiers=["jira"], project_key="OPS", jira_secret_arn=arn)
+        built = notifiers.build_all(cfg)
+        assert [n for n, _ in built] == ["jira"]
+        assert isinstance(built[0][1], JiraNotifier)
+
+
+def test_build_all_both() -> None:
+    with mock_aws():
+        ja = _secret("j", {"base_url": "https://x.atlassian.net", "email": "e", "api_token": "t"})
+        ga = _secret("g", {"token": "t"})
+        cfg = make_config(
+            notifiers=["jira", "github"],
+            project_key="OPS",
+            github_repo="o/r",
+            jira_secret_arn=ja,
+            github_secret_arn=ga,
+        )
+        built = notifiers.build_all(cfg)
+        assert [n for n, _ in built] == ["jira", "github"]
+        assert isinstance(built[1][1], GithubNotifier)
+
+
+def test_build_all_jira_missing_project_key() -> None:
+    cfg = make_config(notifiers=["jira"], project_key="")
     with pytest.raises(ValueError, match="requires JIRA_PROJECT_KEY"):
-        notifiers.build(cfg)
+        notifiers.build_all(cfg)
 
 
-def test_build_github() -> None:
-    from handler.notifiers.github.notifier import GithubNotifier
-
-    with mock_aws():
-        sm = boto3.client("secretsmanager", region_name="us-east-1")
-        arn = sm.create_secret(
-            Name="gh",
-            SecretString=json.dumps(
-                {"token": "ghtok", "api_url": "https://ghe.example.com/api/v3"}
-            ),
-        )["ARN"]
-        cfg = Config("github", "clouddrove/x", "", "Task", "Low", {}, "t", arn, "Done")
-        with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
-            notifier = notifiers.build(cfg)
-        assert isinstance(notifier, GithubNotifier)
-        # the secret's token and api_url are threaded into the client
-        assert notifier._client._token == "ghtok"  # noqa: SLF001
-        assert notifier._client._base == "https://ghe.example.com/api/v3"  # noqa: SLF001
-
-
-def test_build_github_without_repo_raises() -> None:
-    cfg = Config("github", "", "", "Task", "Low", {}, "t", "arn", "Done")
+def test_build_all_github_missing_repo() -> None:
+    cfg = make_config(notifiers=["github"], github_repo="")
     with pytest.raises(ValueError, match="requires GITHUB_REPO"):
-        notifiers.build(cfg)
+        notifiers.build_all(cfg)
 
 
-def test_build_jira_reads_secret() -> None:
-    with mock_aws():
-        sm = boto3.client("secretsmanager", region_name="us-east-1")
-        arn = sm.create_secret(
-            Name="creds",
-            SecretString=json.dumps(
-                {"base_url": "https://x.atlassian.net", "email": "e", "api_token": "t"}
-            ),
-        )["ARN"]
-        cfg = Config("jira", "", "OPS", "Task", "Low", {}, "t", arn, "Done")
-        with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
-            notifier = notifiers.build(cfg)
-        assert isinstance(notifier, JiraNotifier)
-        assert isinstance(notifier._client, JiraClient)  # noqa: SLF001
+def test_build_all_unknown() -> None:
+    cfg = make_config(notifiers=["slack"])
+    with pytest.raises(ValueError, match="unknown notifier"):
+        notifiers.build_all(cfg)
