@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 _CLOSED = {"closed", "resolved"}
@@ -17,6 +17,7 @@ class HealthEvent:
     description: str
     start_time: str
     end_time: str
+    instance_tags: dict[str, dict[str, str]] = field(default_factory=dict)
 
     @property
     def is_closed(self) -> bool:
