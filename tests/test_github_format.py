@@ -39,3 +39,20 @@ def test_priority_label_lowercased():
 def test_priority_label_default():
     ev = HealthEvent("a", "OTHER", "open", "1", "us-east-1", [], "", "", "")
     assert gh.priority_label(CFG, ev) == "priority:low"
+
+
+def test_body_includes_instance_tags():
+    ev = HealthEvent(
+        "arn:abc",
+        "T",
+        "open",
+        "1",
+        "us-east-1",
+        ["i-0abc"],
+        "d",
+        "s",
+        "e",
+        instance_tags={"i-0abc": {"Name": "web-01"}},
+    )
+    b = gh.body(ev)
+    assert "Instance tags" in b and "i-0abc" in b and "Name=web-01" in b

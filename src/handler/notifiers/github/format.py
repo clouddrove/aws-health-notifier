@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ...config import Config
+from ...enrichment import tags as tag_util
 from ...events import HealthEvent
 from .. import priority
 
@@ -19,9 +20,14 @@ def body(ev: HealthEvent) -> str:
         f"**Instances**: {', '.join(ev.entities) or '-'}",
         f"**Window**: {ev.start_time} -> {ev.end_time}",
         f"**Event ARN**: {ev.event_arn}",
-        "",
-        ev.description or "-",
     ]
+    if ev.instance_tags:
+        lines.append("")
+        lines.append("Instance tags:")
+        for iid, pairs in ev.instance_tags.items():
+            lines.append(f"- **{iid}**: {tag_util.format_pairs(pairs)}")
+    lines.append("")
+    lines.append(ev.description or "-")
     return "\n".join(lines)
 
 
