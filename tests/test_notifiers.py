@@ -87,7 +87,9 @@ def test_build_github() -> None:
         sm = boto3.client("secretsmanager", region_name="us-east-1")
         arn = sm.create_secret(
             Name="gh",
-            SecretString=json.dumps({"token": "ghtok", "api_url": "https://ghe.example.com/api/v3"}),
+            SecretString=json.dumps(
+                {"token": "ghtok", "api_url": "https://ghe.example.com/api/v3"}
+            ),
         )["ARN"]
         cfg = Config("github", "clouddrove/x", "", "Task", "Low", {}, "t", arn, "Done")
         with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
