@@ -8,7 +8,7 @@ from unittest.mock import patch
 
 import pytest
 
-from handler.jira import JiraClient, JiraError
+from handler.notifiers.jira.client import JiraClient, JiraError
 
 BASE = "https://example.atlassian.net"
 

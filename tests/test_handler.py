@@ -132,7 +132,7 @@ def test_non_ec2_ignored(env: _Jira) -> None:
 
 
 def test_jira_failure_propagates(env: _Jira) -> None:
-    from handler.jira import JiraError
+    from handler.notifiers.jira.client import JiraError
 
     def boom(req: urllib.request.Request, timeout: float | None = None) -> _FakeResp:
         raise urllib.error.HTTPError(req.full_url, 500, "err", Message(), io.BytesIO(b"{}"))

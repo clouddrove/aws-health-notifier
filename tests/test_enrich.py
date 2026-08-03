@@ -1,11 +1,13 @@
 from typing import Any
 
-from handler import enrich
 from handler.config import Config
 from handler.events import HealthEvent
+from handler.notifiers import priority
+from handler.notifiers.jira import format as enrich
 
 CFG = Config(
     "jira",
+    "",
     "OPS",
     "Task",
     "Low",
@@ -28,12 +30,12 @@ EV = HealthEvent(
 
 
 def test_priority_mapped():
-    assert enrich.priority(CFG, EV) == "High"
+    assert priority.resolve(CFG, EV) == "High"
 
 
 def test_priority_default():
     ev = HealthEvent("a", "SOME_OTHER_CODE", "open", "1", "us-east-1", [], "", "", "")
-    assert enrich.priority(CFG, ev) == "Low"
+    assert priority.resolve(CFG, ev) == "Low"
 
 
 def test_summary_contains_instance_and_account():

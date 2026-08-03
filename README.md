@@ -24,13 +24,13 @@ Member accounts ──(AWS Health org events)──▶ Central Ops account
                                      ├─ dedup / lifecycle ─▶ DynamoDB (eventArn ▶ ref)
                                      ├─ enrich (event payload only)
                                      ├─ priority map
-                                     └─ Notifier ─▶ Jira REST v3 (create / comment / transition)
-                                                │
+                                     └─ Notifier ─▶ Jira REST v3 or GitHub Issues
+                                                │       (create / comment / close)
                                      async failure ─▶ SQS DLQ
 ```
 
-The Lambda is sink-agnostic. It calls a `Notifier` interface; `NOTIFIER=jira`
-selects the Jira implementation. Adding a sink is a new module under
+The Lambda is sink-agnostic. It calls a `Notifier` interface; `NOTIFIER=jira|github`
+selects the implementation. Adding a sink is a new subpackage under
 `src/handler/notifiers/` plus one branch in the factory.
 
 Lifecycle, driven by the Health `statusCode` and DynamoDB state:
@@ -50,16 +50,17 @@ src/handler/
   handler.py            Lambda entrypoint, sink-agnostic orchestration
   config.py             env-driven configuration
   events.py             parse AWS Health events
-  enrich.py             build ticket fields from the event payload (Jira ADF)
   state.py              DynamoDB dedup + lifecycle
   secrets.py            read the notifier secret
-  jira.py               low-level Jira Cloud REST v3 client
+  logging.py            structured JSON logging
   notifiers/
-    base.py             Notifier protocol
-    jira_notifier.py    Jira implementation
+    base.py             Notifier protocol + NotifierError
+    priority.py         event type to priority mapping
     __init__.py         build(cfg) factory
+    jira/               client.py, format.py (ADF), notifier.py
+    github/             client.py, format.py (markdown), notifier.py
 terraform/              EventBridge, Lambda, IAM, DynamoDB, SQS DLQ, S3 backend
-tests/                  pytest, moto (AWS), urllib mocking (Jira)
+tests/                  pytest, moto (AWS), urllib mocking (Jira and GitHub)
 .github/workflows/      ci.yml (checks) and deploy.yml (OIDC apply)
 ```
 
@@ -67,8 +68,8 @@ tests/                  pytest, moto (AWS), urllib mocking (Jira)
 
 - A central operations AWS account.
 - Terraform >= 1.10, AWS provider ~> 6.57.
-- A Jira Cloud project with permission to create issues, add comments, and
-  transition issues.
+- A notifier target: a Jira Cloud project (create/comment/transition) or a
+  GitHub repo with a PAT that has issues read and write.
 - An S3 bucket for Terraform state (native lockfile, no DynamoDB lock table).
 
 ## Setup
@@ -84,9 +85,13 @@ aws organizations register-delegated-administrator \
 This is an organization-management action, run once outside Terraform. It makes
 member-account EC2 Health events surface on the central account event bus.
 
-### 2. Create the notifier secret (central account)
+### 2. Choose a notifier and create its secret (central account)
 
-Store Jira credentials in Secrets Manager as JSON:
+Set `NOTIFIER` (Terraform var `notifier`) to `jira` or `github`. Store that
+notifier's credentials in a Secrets Manager secret and pass its ARN as
+`secret_arn`.
+
+**Jira** (`NOTIFIER=jira`) needs `JIRA_PROJECT_KEY` and a secret:
 
 ```json
 {
@@ -96,13 +101,30 @@ Store Jira credentials in Secrets Manager as JSON:
 }
 ```
 
+The Jira account needs permission to create issues, add comments, and
+transition issues. Priority becomes the Jira priority name.
+
+**GitHub Issues** (`NOTIFIER=github`) needs `GITHUB_REPO` (`owner/repo`) and a
+secret:
+
+```json
+{
+  "token": "<github-pat>",
+  "api_url": "https://api.github.com"
+}
+```
+
+`api_url` is optional (set it for GitHub Enterprise). The PAT needs issues read
+and write on the target repo. Priority becomes a `priority:<level>` label, which
+the notifier creates on the repo if missing.
+
 ```bash
 aws secretsmanager create-secret \
   --name aws-health-notifier/creds \
-  --secret-string file://jira-creds.json
+  --secret-string file://creds.json
 ```
 
-Note the returned ARN for `jira_secret_arn`.
+Note the returned ARN for `secret_arn`.
 
 ### 3. Deploy
 
@@ -125,8 +147,9 @@ Everything runs in CI, and deploys can run from Actions too.
 - **`ci.yml`** (every push and PR): ruff lint + format check, mypy strict,
   pytest, a package-and-import check on the Lambda zip, then terraform fmt,
   validate, tflint, and checkov.
-- **`deploy.yml`** (push to `main`, or manual): builds the zip, assumes an AWS
-  role via GitHub OIDC (no static keys), and runs `terraform apply`.
+- **`deploy.yml`** (manual, from the Actions tab): assumes an AWS role via GitHub
+  OIDC (no static keys) and runs `terraform apply` (Terraform builds the Lambda
+  zip via the archive provider).
 
 Configure these repo-level Actions variables for deploy:
 
@@ -135,9 +158,10 @@ Configure these repo-level Actions variables for deploy:
 | `AWS_DEPLOY_ROLE_ARN` | IAM role the workflow assumes via OIDC |
 | `AWS_REGION` | deployment region |
 | `TF_STATE_BUCKET` | S3 bucket holding Terraform state |
-| `JIRA_PROJECT_KEY` | Jira project for tickets |
-| `JIRA_SECRET_ARN` | ARN of the Secrets Manager secret from step 2 |
-| `NOTIFIER` | optional, notifier backend, defaults to `jira` |
+| `SECRET_ARN` | ARN of the Secrets Manager secret from step 2 |
+| `NOTIFIER` | optional, `jira` or `github`, defaults to `jira` |
+| `JIRA_PROJECT_KEY` | Jira project for tickets (when notifier is jira) |
+| `GITHUB_REPO` | owner/repo for issues (when notifier is github) |
 
 The IAM role's trust policy must allow this repository's OIDC subject
 (`token.actions.githubusercontent.com`).
@@ -147,13 +171,14 @@ The IAM role's trust policy must allow this repository's OIDC subject
 | Env var (Lambda) | Terraform variable | Default |
 |---|---|---|
 | `NOTIFIER` | `notifier` | `jira` |
-| `JIRA_PROJECT_KEY` | `jira_project_key` | required |
+| `SECRET_ARN` | `secret_arn` | required |
+| `GITHUB_REPO` | `github_repo` | `""` (required for github) |
+| `JIRA_PROJECT_KEY` | `jira_project_key` | `""` (required for jira) |
 | `JIRA_ISSUE_TYPE` | `jira_issue_type` | `Task` |
 | `DEFAULT_PRIORITY` | `default_priority` | `Low` |
 | `PRIORITY_MAP_JSON` | `priority_map` | retirement ▶ High |
-| `DONE_TRANSITION` | `done_transition` | `Done` |
+| `DONE_TRANSITION` | `done_transition` | `Done` (jira only) |
 | `TABLE_NAME` | (set by Terraform) | - |
-| `SECRET_ARN` | `jira_secret_arn` | required |
 
 ## Development
 

@@ -23,3 +23,6 @@ terraform/.terraform/
 
 # OS
 .DS_Store
+
+# uv (not used; deps installed via pip in CI)
+uv.lock

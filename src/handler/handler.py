@@ -1,24 +1,16 @@
 from __future__ import annotations
 
-import json
-import logging
 from typing import Any
 
 from . import config, events, notifiers
+from . import logging as structured_log
 from .state import StateStore
-
-log = logging.getLogger()
-log.setLevel(logging.INFO)
-
-
-def _log(status: str, event_arn: str, **extra: object) -> None:
-    log.info(json.dumps({"status": status, "eventArn": event_arn, **extra}))
 
 
 def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     ev = events.parse(event)
     if ev is None:
-        _log("ignored", event.get("detail", {}).get("eventArn") or "unknown")
+        structured_log.emit("ignored", event.get("detail", {}).get("eventArn") or "unknown")
         return {"status": "ignored"}
 
     cfg = config.load()
@@ -28,22 +20,22 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     if ev.is_closed:
         record = store.get_record(ev.event_arn)
         if record is None:
-            _log("ignored", ev.event_arn, reason="closed-untracked")
+            structured_log.emit("ignored", ev.event_arn, reason="closed-untracked")
             return {"status": "ignored"}
         ref, status = record
         if status == "closed":
             # Already closed on a prior delivery; skip to stay idempotent and
             # avoid duplicate resolution comments on redelivery.
-            _log("deduped", ev.event_arn, ref=ref, reason="already-closed")
+            structured_log.emit("deduped", ev.event_arn, ref=ref, reason="already-closed")
             return {"status": "deduped"}
         notifier.close(ref, cfg)
         store.mark_closed(ev.event_arn)
-        _log("closed", ev.event_arn, ref=ref)
+        structured_log.emit("closed", ev.event_arn, ref=ref)
         return {"status": "closed"}
 
     existing = store.get_issue_key(ev.event_arn)
     if existing is not None:
-        _log("deduped", ev.event_arn, ref=existing)
+        structured_log.emit("deduped", ev.event_arn, ref=existing)
         return {"status": "deduped"}
 
     # Create-then-store: the ticket is created before the state write. If the
@@ -55,7 +47,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
     # race below.
     ref = notifier.open(ev, cfg)
     if not store.put_if_absent(ev.event_arn, ref):
-        _log("deduped", ev.event_arn, ref=ref, reason="race")
+        structured_log.emit("deduped", ev.event_arn, ref=ref, reason="race")
         return {"status": "deduped"}
-    _log("created", ev.event_arn, ref=ref)
+    structured_log.emit("created", ev.event_arn, ref=ref)
     return {"status": "created"}

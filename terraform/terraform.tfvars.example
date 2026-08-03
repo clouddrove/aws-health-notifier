@@ -1,9 +1,14 @@
 region           = "us-east-1"
 notifier          = "jira"
 jira_project_key  = "OPS"
-jira_secret_arn   = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/creds-XXXX"
+secret_arn        = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/creds-XXXX"
 default_priority  = "Low"
 done_transition   = "Done"
+
+# For GitHub Issues instead, set:
+# notifier    = "github"
+# github_repo = "clouddrove/your-repo"
+# secret_arn  = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/github-XXXX"
 
 priority_map = {
   AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED = "High"

@@ -9,11 +9,12 @@ from moto import mock_aws
 from handler import notifiers
 from handler.config import Config
 from handler.events import HealthEvent
-from handler.jira import JiraClient
-from handler.notifiers.jira_notifier import JiraNotifier
+from handler.notifiers.jira.client import JiraClient
+from handler.notifiers.jira.notifier import JiraNotifier
 
 CFG = Config(
     "jira",
+    "",
     "OPS",
     "Task",
     "Low",
@@ -68,8 +69,40 @@ def test_jira_notifier_close_comments_and_transitions() -> None:
 
 
 def test_build_unknown_notifier_raises() -> None:
-    cfg = Config("slack", "OPS", "Task", "Low", {}, "t", "arn", "Done")
+    cfg = Config("slack", "", "OPS", "Task", "Low", {}, "t", "arn", "Done")
     with pytest.raises(ValueError, match="unknown notifier"):
+        notifiers.build(cfg)
+
+
+def test_build_jira_without_project_key_raises() -> None:
+    cfg = Config("jira", "", "", "Task", "Low", {}, "t", "arn", "Done")
+    with pytest.raises(ValueError, match="requires JIRA_PROJECT_KEY"):
+        notifiers.build(cfg)
+
+
+def test_build_github() -> None:
+    from handler.notifiers.github.notifier import GithubNotifier
+
+    with mock_aws():
+        sm = boto3.client("secretsmanager", region_name="us-east-1")
+        arn = sm.create_secret(
+            Name="gh",
+            SecretString=json.dumps(
+                {"token": "ghtok", "api_url": "https://ghe.example.com/api/v3"}
+            ),
+        )["ARN"]
+        cfg = Config("github", "clouddrove/x", "", "Task", "Low", {}, "t", arn, "Done")
+        with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
+            notifier = notifiers.build(cfg)
+        assert isinstance(notifier, GithubNotifier)
+        # the secret's token and api_url are threaded into the client
+        assert notifier._client._token == "ghtok"  # noqa: SLF001
+        assert notifier._client._base == "https://ghe.example.com/api/v3"  # noqa: SLF001
+
+
+def test_build_github_without_repo_raises() -> None:
+    cfg = Config("github", "", "", "Task", "Low", {}, "t", "arn", "Done")
+    with pytest.raises(ValueError, match="requires GITHUB_REPO"):
         notifiers.build(cfg)
 
 
@@ -82,7 +115,7 @@ def test_build_jira_reads_secret() -> None:
                 {"base_url": "https://x.atlassian.net", "email": "e", "api_token": "t"}
             ),
         )["ARN"]
-        cfg = Config("jira", "OPS", "Task", "Low", {}, "t", arn, "Done")
+        cfg = Config("jira", "", "OPS", "Task", "Low", {}, "t", arn, "Done")
         with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
             notifier = notifiers.build(cfg)
         assert isinstance(notifier, JiraNotifier)
