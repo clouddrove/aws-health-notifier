@@ -8,6 +8,7 @@ from dataclasses import dataclass
 @dataclass(frozen=True)
 class Config:
     notifier: str
+    github_repo: str
     project_key: str
     issue_type: str
     default_priority: str
@@ -27,7 +28,8 @@ def _load_priority_map() -> dict[str, str]:
 def load() -> Config:
     return Config(
         notifier=os.environ.get("NOTIFIER", "jira"),
-        project_key=os.environ["JIRA_PROJECT_KEY"],
+        github_repo=os.environ.get("GITHUB_REPO", ""),
+        project_key=os.environ.get("JIRA_PROJECT_KEY", ""),
         issue_type=os.environ.get("JIRA_ISSUE_TYPE", "Task"),
         default_priority=os.environ.get("DEFAULT_PRIORITY", "Low"),
         priority_map=_load_priority_map(),

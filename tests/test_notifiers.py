@@ -14,6 +14,7 @@ from handler.notifiers.jira.notifier import JiraNotifier
 
 CFG = Config(
     "jira",
+    "",
     "OPS",
     "Task",
     "Low",
@@ -68,8 +69,14 @@ def test_jira_notifier_close_comments_and_transitions() -> None:
 
 
 def test_build_unknown_notifier_raises() -> None:
-    cfg = Config("slack", "OPS", "Task", "Low", {}, "t", "arn", "Done")
+    cfg = Config("slack", "", "OPS", "Task", "Low", {}, "t", "arn", "Done")
     with pytest.raises(ValueError, match="unknown notifier"):
+        notifiers.build(cfg)
+
+
+def test_build_jira_without_project_key_raises() -> None:
+    cfg = Config("jira", "", "", "Task", "Low", {}, "t", "arn", "Done")
+    with pytest.raises(ValueError, match="requires JIRA_PROJECT_KEY"):
         notifiers.build(cfg)
 
 
@@ -82,7 +89,7 @@ def test_build_jira_reads_secret() -> None:
                 {"base_url": "https://x.atlassian.net", "email": "e", "api_token": "t"}
             ),
         )["ARN"]
-        cfg = Config("jira", "OPS", "Task", "Low", {}, "t", arn, "Done")
+        cfg = Config("jira", "", "OPS", "Task", "Low", {}, "t", arn, "Done")
         with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
             notifier = notifiers.build(cfg)
         assert isinstance(notifier, JiraNotifier)

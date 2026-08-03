@@ -7,6 +7,7 @@ from handler.notifiers.jira import format as enrich
 
 CFG = Config(
     "jira",
+    "",
     "OPS",
     "Task",
     "Low",

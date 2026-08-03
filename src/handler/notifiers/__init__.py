@@ -10,6 +10,8 @@ from .jira.notifier import JiraNotifier
 def build(cfg: Config) -> Notifier:
     """Construct the Notifier selected by cfg.notifier."""
     if cfg.notifier == "jira":
+        if not cfg.project_key:
+            raise ValueError("notifier 'jira' requires JIRA_PROJECT_KEY")
         creds = secrets.load(cfg.secret_arn)
         return JiraNotifier(JiraClient(creds["base_url"], creds["email"], creds["api_token"]))
     raise ValueError(f"unknown notifier: {cfg.notifier}")
