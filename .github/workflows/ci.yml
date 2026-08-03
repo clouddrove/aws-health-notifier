@@ -12,8 +12,8 @@ jobs:
   python:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
         with:
           python-version: "3.13"
       - run: pip install "ruff==0.16.1" "mypy==1.19.1" pytest "moto[dynamodb,secretsmanager]" boto3 "boto3-stubs[dynamodb,secretsmanager]"
@@ -33,12 +33,12 @@ jobs:
   terraform:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@v7
+      - uses: hashicorp/setup-terraform@v4
       - run: terraform -chdir=terraform fmt -check
       - run: terraform -chdir=terraform init -backend=false
       - run: terraform -chdir=terraform validate
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: terraform-linters/setup-tflint@v6
       - run: tflint --chdir=terraform --init
       - run: tflint --chdir=terraform
       - name: Checkov
