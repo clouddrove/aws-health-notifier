@@ -1,17 +1,11 @@
-from handler.config import Config
 from handler.events import HealthEvent
 from handler.notifiers.github import format as gh
+from tests.conftest import make_config
 
-CFG = Config(
-    "github",
-    "clouddrove/x",
-    "",
-    "Task",
-    "Low",
-    {"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"},
-    "t",
-    "arn",
-    "Done",
+CFG = make_config(
+    notifiers=["github"],
+    github_repo="clouddrove/x",
+    priority_map={"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"},
 )
 EV = HealthEvent(
     "arn:abc",

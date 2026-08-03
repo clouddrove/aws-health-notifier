@@ -14,40 +14,42 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
         return {"status": "ignored"}
 
     cfg = config.load()
-    notifier = notifiers.build(cfg)
+    built = notifiers.build_all(cfg)
     store = StateStore(cfg.table_name)
 
     if ev.is_closed:
-        record = store.get_record(ev.event_arn)
-        if record is None:
+        refs = store.get_refs(ev.event_arn)
+        if not refs:
             structured_log.emit("ignored", ev.event_arn, reason="closed-untracked")
             return {"status": "ignored"}
-        ref, status = record
-        if status == "closed":
-            # Already closed on a prior delivery; skip to stay idempotent and
-            # avoid duplicate resolution comments on redelivery.
-            structured_log.emit("deduped", ev.event_arn, ref=ref, reason="already-closed")
-            return {"status": "deduped"}
-        notifier.close(ref, cfg)
-        store.mark_closed(ev.event_arn)
-        structured_log.emit("closed", ev.event_arn, ref=ref)
-        return {"status": "closed"}
+        by_name = dict(built)
+        closed_any = False
+        for sr in refs:
+            if sr.status == "closed":
+                continue
+            notifier = by_name.get(sr.sink)
+            if notifier is None:
+                structured_log.emit("skipped", ev.event_arn, sink=sr.sink, reason="not-configured")
+                continue
+            notifier.close(sr.ref, cfg)
+            store.mark_closed(ev.event_arn, sr.sink)
+            structured_log.emit("closed", ev.event_arn, sink=sr.sink, ref=sr.ref)
+            closed_any = True
+        return {"status": "closed" if closed_any else "deduped"}
 
-    existing = store.get_issue_key(ev.event_arn)
-    if existing is not None:
-        structured_log.emit("deduped", ev.event_arn, ref=existing)
-        return {"status": "deduped"}
-
-    # Create-then-store: the ticket is created before the state write. If the
-    # state write raises a transient error the exception propagates and the
-    # event is retried, which can create a second ticket for the same eventArn.
-    # Accepted tradeoff: dedup is best-effort via put_if_absent, and Health
-    # events are low volume, so a rare duplicate is cheaper than a two-phase
-    # write. The conditional put still guards the common concurrent-redelivery
-    # race below.
-    ref = notifier.open(ev, cfg)
-    if not store.put_if_absent(ev.event_arn, ref):
-        structured_log.emit("deduped", ev.event_arn, ref=ref, reason="race")
-        return {"status": "deduped"}
-    structured_log.emit("created", ev.event_arn, ref=ref)
-    return {"status": "created"}
+    existing = {sr.sink for sr in store.get_refs(ev.event_arn)}
+    created_any = False
+    for name, notifier in built:
+        if name in existing:
+            structured_log.emit("deduped", ev.event_arn, sink=name)
+            continue
+        # Create-then-store per sink: each sink's ref is persisted before the
+        # next sink runs, so a transient failure retries only the unfinished
+        # sinks rather than duplicating the ones that already succeeded.
+        ref = notifier.open(ev, cfg)
+        if store.put_if_absent(ev.event_arn, name, ref):
+            structured_log.emit("created", ev.event_arn, sink=name, ref=ref)
+            created_any = True
+        else:
+            structured_log.emit("deduped", ev.event_arn, sink=name, ref=ref, reason="race")
+    return {"status": "created" if created_any else "deduped"}

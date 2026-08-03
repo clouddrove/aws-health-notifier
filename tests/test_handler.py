@@ -69,8 +69,14 @@ def env(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Jira]:
     with mock_aws():
         boto3.client("dynamodb", region_name="us-east-1").create_table(
             TableName=TABLE,
-            KeySchema=[{"AttributeName": "eventArn", "KeyType": "HASH"}],
-            AttributeDefinitions=[{"AttributeName": "eventArn", "AttributeType": "S"}],
+            KeySchema=[
+                {"AttributeName": "eventArn", "KeyType": "HASH"},
+                {"AttributeName": "sink", "KeyType": "RANGE"},
+            ],
+            AttributeDefinitions=[
+                {"AttributeName": "eventArn", "AttributeType": "S"},
+                {"AttributeName": "sink", "AttributeType": "S"},
+            ],
             BillingMode="PAY_PER_REQUEST",
         )
         sm = boto3.client("secretsmanager", region_name="us-east-1")
@@ -85,7 +91,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> Iterator[_Jira]:
             "PRIORITY_MAP_JSON", json.dumps({"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"})
         )
         monkeypatch.setenv("TABLE_NAME", TABLE)
-        monkeypatch.setenv("SECRET_ARN", arn)
+        monkeypatch.setenv("JIRA_SECRET_ARN", arn)
         monkeypatch.setenv("DONE_TRANSITION", "Done")
         monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
         jira = _Jira()

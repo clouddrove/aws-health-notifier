@@ -11,13 +11,19 @@ provider "aws" {
 
 # DynamoDB application state (dedup + lifecycle)
 resource "aws_dynamodb_table" "state" {
-  # checkov:skip=CKV_AWS_119: table holds only eventArn to issueKey mapping, no sensitive data; SSE with the AWS-managed key is sufficient and avoids KMS cost.
+  # checkov:skip=CKV_AWS_119: table holds only eventArn to ref mapping, no sensitive data; SSE with the AWS-managed key is sufficient and avoids KMS cost.
   name         = "${var.name_prefix}-state"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "eventArn"
+  range_key    = "sink"
 
   attribute {
     name = "eventArn"
+    type = "S"
+  }
+
+  attribute {
+    name = "sink"
     type = "S"
   }
 
@@ -69,13 +75,13 @@ data "aws_iam_policy_document" "lambda" {
   }
   statement {
     sid       = "Ddb"
-    actions   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem"]
+    actions   = ["dynamodb:PutItem", "dynamodb:GetItem", "dynamodb:UpdateItem", "dynamodb:Query"]
     resources = [aws_dynamodb_table.state.arn]
   }
   statement {
     sid       = "Secret"
     actions   = ["secretsmanager:GetSecretValue"]
-    resources = [var.secret_arn]
+    resources = length(compact([var.jira_secret_arn, var.github_secret_arn])) > 0 ? compact([var.jira_secret_arn, var.github_secret_arn]) : ["arn:aws:secretsmanager:*:*:secret:disabled"]
   }
   statement {
     sid       = "Dlq"
@@ -106,7 +112,7 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
-  # checkov:skip=CKV_AWS_158: logs carry only status, eventArn, and issueKey, no secrets; AWS-managed encryption is sufficient.
+  # checkov:skip=CKV_AWS_158: logs carry only status, eventArn, and ref, no secrets; AWS-managed encryption is sufficient.
   # checkov:skip=CKV_AWS_338: retention is set via var (90 days default) to balance cost against audit need.
   name              = "/aws/lambda/${var.name_prefix}"
   retention_in_days = var.log_retention_days
@@ -129,14 +135,15 @@ resource "aws_lambda_function" "handler" {
 
   environment {
     variables = {
-      NOTIFIER          = var.notifier
+      NOTIFIERS         = var.notifiers
       GITHUB_REPO       = var.github_repo
+      JIRA_SECRET_ARN   = var.jira_secret_arn
+      GITHUB_SECRET_ARN = var.github_secret_arn
       JIRA_PROJECT_KEY  = var.jira_project_key
       JIRA_ISSUE_TYPE   = var.jira_issue_type
       DEFAULT_PRIORITY  = var.default_priority
       PRIORITY_MAP_JSON = jsonencode(var.priority_map)
       TABLE_NAME        = aws_dynamodb_table.state.name
-      SECRET_ARN        = var.secret_arn
       DONE_TRANSITION   = var.done_transition
     }
   }

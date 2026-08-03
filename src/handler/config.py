@@ -7,15 +7,25 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class Config:
-    notifier: str
+    notifiers: list[str]
     github_repo: str
+    jira_secret_arn: str
+    github_secret_arn: str
     project_key: str
     issue_type: str
     default_priority: str
     priority_map: dict[str, str]
     table_name: str
-    secret_arn: str
     done_transition: str
+
+
+def parse_notifiers(raw: str) -> list[str]:
+    seen: list[str] = []
+    for part in raw.split(","):
+        name = part.strip().lower()
+        if name and name not in seen:
+            seen.append(name)
+    return seen
 
 
 def _load_priority_map() -> dict[str, str]:
@@ -27,13 +37,14 @@ def _load_priority_map() -> dict[str, str]:
 
 def load() -> Config:
     return Config(
-        notifier=os.environ.get("NOTIFIER", "jira"),
+        notifiers=parse_notifiers(os.environ.get("NOTIFIERS", "jira")),
         github_repo=os.environ.get("GITHUB_REPO", ""),
+        jira_secret_arn=os.environ.get("JIRA_SECRET_ARN", ""),
+        github_secret_arn=os.environ.get("GITHUB_SECRET_ARN", ""),
         project_key=os.environ.get("JIRA_PROJECT_KEY", ""),
         issue_type=os.environ.get("JIRA_ISSUE_TYPE", "Task"),
         default_priority=os.environ.get("DEFAULT_PRIORITY", "Low"),
         priority_map=_load_priority_map(),
         table_name=os.environ["TABLE_NAME"],
-        secret_arn=os.environ["SECRET_ARN"],
         done_transition=os.environ.get("DONE_TRANSITION", "Done"),
     )
