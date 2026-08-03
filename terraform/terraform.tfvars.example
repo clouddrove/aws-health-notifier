@@ -1,17 +1,17 @@
-region           = "us-east-1"
-notifier          = "jira"
-jira_project_key  = "OPS"
-secret_arn        = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/creds-XXXX"
-default_priority  = "Low"
-done_transition   = "Done"
-
-# For GitHub Issues instead, set:
-# notifier    = "github"
-# github_repo = "clouddrove/your-repo"
-# secret_arn  = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/github-XXXX"
+region            = "us-east-1"
+notifiers          = "jira,github"
+jira_project_key   = "OPS"
+github_repo        = "clouddrove/your-repo"
+jira_secret_arn    = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/jira-XXXX"
+github_secret_arn  = "arn:aws:secretsmanager:us-east-1:111122223333:secret:aws-health-notifier/github-XXXX"
+default_priority   = "Low"
+done_transition    = "Done"
 
 priority_map = {
   AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED = "High"
 }
 
 event_type_categories = ["scheduledChange"]
+
+# Only one notifier? Set notifiers = "jira" (or "github") and leave the other
+# secret unset. github_repo is required only when notifiers includes github.

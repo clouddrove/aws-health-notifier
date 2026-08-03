@@ -10,8 +10,8 @@ variable "name_prefix" {
   default     = "aws-health-notifier"
 }
 
-variable "notifier" {
-  description = "Notifier backend that receives events (jira today)."
+variable "notifiers" {
+  description = "Comma-separated notifiers to fan out to (jira, github)."
   type        = string
   default     = "jira"
 }
@@ -19,6 +19,7 @@ variable "notifier" {
 variable "jira_project_key" {
   description = "Jira project key that tickets are created in."
   type        = string
+  default     = ""
 }
 
 variable "jira_issue_type" {
@@ -45,13 +46,20 @@ variable "done_transition" {
   default     = "Done"
 }
 
-variable "secret_arn" {
-  description = "ARN of the Secrets Manager secret holding the notifier credentials (Jira or GitHub JSON)."
+variable "jira_secret_arn" {
+  description = "ARN of the Jira credentials secret (used when notifiers includes jira)."
   type        = string
+  default     = ""
+}
+
+variable "github_secret_arn" {
+  description = "ARN of the GitHub token secret (used when notifiers includes github)."
+  type        = string
+  default     = ""
 }
 
 variable "github_repo" {
-  description = "owner/repo for the GitHub Issues notifier (used when notifier = github)."
+  description = "owner/repo for the GitHub Issues notifier (used when notifiers includes github)."
   type        = string
   default     = ""
 }
