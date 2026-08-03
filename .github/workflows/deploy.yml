@@ -40,7 +40,9 @@ jobs:
       - name: Terraform apply
         env:
           TF_VAR_region: ${{ vars.AWS_REGION }}
-          TF_VAR_notifier: ${{ vars.NOTIFIER || 'jira' }}
+          TF_VAR_notifiers: ${{ vars.NOTIFIERS || 'jira' }}
           TF_VAR_jira_project_key: ${{ vars.JIRA_PROJECT_KEY }}
           TF_VAR_jira_secret_arn: ${{ vars.JIRA_SECRET_ARN }}
+          TF_VAR_github_repo: ${{ vars.GITHUB_REPO }}
+          TF_VAR_github_secret_arn: ${{ vars.GITHUB_SECRET_ARN }}
         run: terraform -chdir=terraform apply -auto-approve
