@@ -3,25 +3,29 @@ import pytest
 from handler import config
 
 
-def _base_env(monkeypatch: pytest.MonkeyPatch) -> None:
+def _env(monkeypatch: pytest.MonkeyPatch, **kw: str) -> None:
     monkeypatch.setenv("TABLE_NAME", "t")
-    monkeypatch.setenv("SECRET_ARN", "arn")
+    for k, v in kw.items():
+        monkeypatch.setenv(k, v)
 
 
-def test_github_repo_parsed(monkeypatch):
-    _base_env(monkeypatch)
-    monkeypatch.setenv("NOTIFIER", "github")
-    monkeypatch.setenv("GITHUB_REPO", "clouddrove/x")
-    monkeypatch.setenv("JIRA_PROJECT_KEY", "")
+def test_notifiers_default_jira(monkeypatch):
+    _env(monkeypatch)
+    assert config.load().notifiers == ["jira"]
+
+
+def test_notifiers_list_parsed(monkeypatch):
+    _env(monkeypatch, NOTIFIERS="jira, github , jira")
+    assert config.load().notifiers == ["jira", "github"]
+
+
+def test_parse_notifiers_helper():
+    assert config.parse_notifiers("GitHub, ,jira") == ["github", "jira"]
+
+
+def test_per_sink_secret_arns(monkeypatch):
+    _env(monkeypatch, JIRA_SECRET_ARN="arn:j", GITHUB_SECRET_ARN="arn:g", GITHUB_REPO="o/r")
     cfg = config.load()
-    assert cfg.notifier == "github"
-    assert cfg.github_repo == "clouddrove/x"
-
-
-def test_jira_defaults(monkeypatch):
-    _base_env(monkeypatch)
-    monkeypatch.delenv("NOTIFIER", raising=False)
-    monkeypatch.setenv("JIRA_PROJECT_KEY", "OPS")
-    cfg = config.load()
-    assert cfg.notifier == "jira"
-    assert cfg.github_repo == ""
+    assert cfg.jira_secret_arn == "arn:j"
+    assert cfg.github_secret_arn == "arn:g"
+    assert cfg.github_repo == "o/r"

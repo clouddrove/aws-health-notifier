@@ -1,21 +1,11 @@
 from typing import Any
 
-from handler.config import Config
 from handler.events import HealthEvent
 from handler.notifiers import priority
 from handler.notifiers.jira import format as enrich
+from tests.conftest import make_config
 
-CFG = Config(
-    "jira",
-    "",
-    "OPS",
-    "Task",
-    "Low",
-    {"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"},
-    "t",
-    "arn",
-    "Done",
-)
+CFG = make_config(priority_map={"AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED": "High"})
 EV = HealthEvent(
     "arn:...abc",
     "AWS_EC2_INSTANCE_RETIREMENT_SCHEDULED",
