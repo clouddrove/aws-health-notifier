@@ -10,7 +10,8 @@ TABLE = "health-jira"
 
 
 @pytest.fixture
-def table() -> Iterator[StateStore]:
+def table(monkeypatch: pytest.MonkeyPatch) -> Iterator[StateStore]:
+    monkeypatch.setenv("AWS_DEFAULT_REGION", "us-east-1")
     with mock_aws():
         ddb = boto3.client("dynamodb", region_name="us-east-1")
         ddb.create_table(

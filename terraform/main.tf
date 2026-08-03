@@ -11,6 +11,7 @@ provider "aws" {
 
 # DynamoDB application state (dedup + lifecycle)
 resource "aws_dynamodb_table" "state" {
+  # checkov:skip=CKV_AWS_119: table holds only eventArn to issueKey mapping, no sensitive data; SSE with the AWS-managed key is sufficient and avoids KMS cost.
   name         = "${var.name_prefix}-state"
   billing_mode = "PAY_PER_REQUEST"
   hash_key     = "eventArn"
@@ -105,11 +106,16 @@ data "archive_file" "lambda" {
 }
 
 resource "aws_cloudwatch_log_group" "lambda" {
+  # checkov:skip=CKV_AWS_158: logs carry only status, eventArn, and issueKey, no secrets; AWS-managed encryption is sufficient.
+  # checkov:skip=CKV_AWS_338: retention is set via var (90 days default) to balance cost against audit need.
   name              = "/aws/lambda/${var.name_prefix}"
   retention_in_days = var.log_retention_days
 }
 
 resource "aws_lambda_function" "handler" {
+  # checkov:skip=CKV_AWS_117: function calls public Jira and AWS APIs only; a VPC would add NAT cost with no security benefit.
+  # checkov:skip=CKV_AWS_173: environment holds config and the secret ARN only, never the token; AWS-managed encryption at rest is sufficient.
+  # checkov:skip=CKV_AWS_272: code signing is out of scope for this internal event handler.
   function_name    = var.name_prefix
   role             = aws_iam_role.lambda.arn
   runtime          = "python3.13"
