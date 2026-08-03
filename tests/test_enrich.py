@@ -59,3 +59,20 @@ def test_description_carries_every_field():
         EV.description,
     ):
         assert expected in text
+
+
+def test_description_includes_instance_tags():
+    ev = HealthEvent(
+        "arn:abc",
+        "T",
+        "open",
+        "1",
+        "us-east-1",
+        ["i-0abc"],
+        "d",
+        "s",
+        "e",
+        instance_tags={"i-0abc": {"Name": "web-01"}},
+    )
+    text = _flatten_text(enrich.description(ev))
+    assert "i-0abc" in text and "Name=web-01" in text

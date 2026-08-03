@@ -95,3 +95,10 @@ def test_dedup_then_close(env: _GH) -> None:
     closed = {**OPEN_EVENT, "detail": {**OPEN_EVENT["detail"], "statusCode": "closed"}}
     assert handler.lambda_handler(closed, None)["status"] == "closed"
     assert any("PATCH /repos/clouddrove/x/issues/7" in p for p in env.paths)
+
+
+def test_enrich_flag_is_non_fatal(env: _GH, monkeypatch: pytest.MonkeyPatch) -> None:
+    # With enrichment on but no matching instance in moto, fetch fails softly and
+    # returns {}, so the ticket still creates. Guards the enrich wiring.
+    monkeypatch.setenv("ENRICH_TAGS", "true")
+    assert handler.lambda_handler(OPEN_EVENT, None)["status"] == "created"

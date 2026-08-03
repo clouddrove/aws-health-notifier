@@ -15,3 +15,9 @@ event_type_categories = ["scheduledChange"]
 
 # Only one notifier? Set notifiers = "jira" (or "github") and leave the other
 # secret unset. github_repo is required only when notifiers includes github.
+
+# Opt-in instance tag enrichment (reads Name/Environment tags from member
+# accounts via a StackSet-deployed read role):
+# enrich_tags = true
+# org_root_id = "r-xxxx"
+# tag_keys    = "Name,Environment"

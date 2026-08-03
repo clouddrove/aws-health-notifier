@@ -185,6 +185,32 @@ The IAM role's trust policy must allow this repository's OIDC subject
 | `PRIORITY_MAP_JSON` | `priority_map` | retirement ▶ High |
 | `DONE_TRANSITION` | `done_transition` | `Done` (jira only) |
 | `TABLE_NAME` | (set by Terraform) | - |
+| `ENRICH_TAGS` | `enrich_tags` | `false` |
+| `DESCRIBE_ROLE_NAME` | `describe_role_name` | `aws-health-notifier-describe` |
+| `TAG_KEYS` | `tag_keys` | `Name,Environment` |
+
+## Tag enrichment (optional)
+
+Off by default. When enabled, each ticket also shows the affected instances'
+tags (Name, environment, whatever you pick), read from the member account the
+event belongs to.
+
+Enable it with:
+
+```hcl
+enrich_tags = true
+org_root_id = "r-xxxx"   # organization root or OU id
+tag_keys    = "Name,Environment"
+```
+
+Terraform then deploys a read-only role (`describe_role_name`) to every member
+account via a service-managed CloudFormation StackSet. The role trusts only the
+central Lambda role and allows only `ec2:DescribeInstances`. Per event, the
+Lambda assumes that role in the event's account and reads the tags in `tag_keys`.
+
+Enrichment is best-effort: if the role is missing or the read fails, the ticket
+is still created without the tag block. With `enrich_tags = false` there is no
+member-account footprint at all.
 
 ## Development
 

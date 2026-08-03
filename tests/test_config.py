@@ -29,3 +29,18 @@ def test_per_sink_secret_arns(monkeypatch):
     assert cfg.jira_secret_arn == "arn:j"
     assert cfg.github_secret_arn == "arn:g"
     assert cfg.github_repo == "o/r"
+
+
+def test_enrich_defaults(monkeypatch):
+    _env(monkeypatch)
+    cfg = config.load()
+    assert cfg.enrich_tags is False
+    assert cfg.describe_role_name == "aws-health-notifier-describe"
+    assert cfg.tag_keys == ["Name", "Environment"]
+
+
+def test_enrich_enabled(monkeypatch):
+    _env(monkeypatch, ENRICH_TAGS="true", TAG_KEYS="Name, Team")
+    cfg = config.load()
+    assert cfg.enrich_tags is True
+    assert cfg.tag_keys == ["Name", "Team"]

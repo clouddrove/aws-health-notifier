@@ -17,6 +17,9 @@ class Config:
     priority_map: dict[str, str]
     table_name: str
     done_transition: str
+    enrich_tags: bool
+    describe_role_name: str
+    tag_keys: list[str]
 
 
 def parse_notifiers(raw: str) -> list[str]:
@@ -26,6 +29,10 @@ def parse_notifiers(raw: str) -> list[str]:
         if name and name not in seen:
             seen.append(name)
     return seen
+
+
+def _parse_tag_keys(raw: str) -> list[str]:
+    return [k.strip() for k in raw.split(",") if k.strip()]
 
 
 def _load_priority_map() -> dict[str, str]:
@@ -47,4 +54,7 @@ def load() -> Config:
         priority_map=_load_priority_map(),
         table_name=os.environ["TABLE_NAME"],
         done_transition=os.environ.get("DONE_TRANSITION", "Done"),
+        enrich_tags=os.environ.get("ENRICH_TAGS", "").lower() == "true",
+        describe_role_name=os.environ.get("DESCRIBE_ROLE_NAME", "aws-health-notifier-describe"),
+        tag_keys=_parse_tag_keys(os.environ.get("TAG_KEYS", "Name,Environment")),
     )

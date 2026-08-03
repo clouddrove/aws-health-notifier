@@ -45,4 +45,7 @@ jobs:
           TF_VAR_jira_secret_arn: ${{ vars.JIRA_SECRET_ARN }}
           TF_VAR_github_repo: ${{ vars.GITHUB_REPO }}
           TF_VAR_github_secret_arn: ${{ vars.GITHUB_SECRET_ARN }}
+          TF_VAR_enrich_tags: ${{ vars.ENRICH_TAGS || 'false' }}
+          TF_VAR_org_root_id: ${{ vars.ORG_ROOT_ID }}
+          TF_VAR_tag_keys: ${{ vars.TAG_KEYS || 'Name,Environment' }}
         run: terraform -chdir=terraform apply -auto-approve

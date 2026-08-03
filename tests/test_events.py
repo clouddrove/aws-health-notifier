@@ -33,6 +33,12 @@ def test_parse_extracts_fields():
     assert ev.entities == ["i-0abc123"]
 
 
+def test_parse_leaves_instance_tags_empty():
+    ev = events.parse(RAW)
+    assert ev is not None
+    assert ev.instance_tags == {}
+
+
 def test_parse_ignores_non_ec2():
     raw = {**RAW, "detail": {**RAW["detail"], "service": "RDS"}}
     assert events.parse(raw) is None

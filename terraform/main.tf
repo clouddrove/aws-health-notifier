@@ -93,6 +93,11 @@ data "aws_iam_policy_document" "lambda" {
     actions   = ["xray:PutTraceSegments", "xray:PutTelemetryRecords"]
     resources = ["*"]
   }
+  statement {
+    sid       = "AssumeDescribeRole"
+    actions   = ["sts:AssumeRole"]
+    resources = ["arn:aws:iam::*:role/${var.describe_role_name}"]
+  }
 }
 
 resource "aws_iam_role_policy" "lambda" {
@@ -135,16 +140,19 @@ resource "aws_lambda_function" "handler" {
 
   environment {
     variables = {
-      NOTIFIERS         = var.notifiers
-      GITHUB_REPO       = var.github_repo
-      JIRA_SECRET_ARN   = var.jira_secret_arn
-      GITHUB_SECRET_ARN = var.github_secret_arn
-      JIRA_PROJECT_KEY  = var.jira_project_key
-      JIRA_ISSUE_TYPE   = var.jira_issue_type
-      DEFAULT_PRIORITY  = var.default_priority
-      PRIORITY_MAP_JSON = jsonencode(var.priority_map)
-      TABLE_NAME        = aws_dynamodb_table.state.name
-      DONE_TRANSITION   = var.done_transition
+      NOTIFIERS          = var.notifiers
+      GITHUB_REPO        = var.github_repo
+      JIRA_SECRET_ARN    = var.jira_secret_arn
+      GITHUB_SECRET_ARN  = var.github_secret_arn
+      JIRA_PROJECT_KEY   = var.jira_project_key
+      JIRA_ISSUE_TYPE    = var.jira_issue_type
+      DEFAULT_PRIORITY   = var.default_priority
+      PRIORITY_MAP_JSON  = jsonencode(var.priority_map)
+      TABLE_NAME         = aws_dynamodb_table.state.name
+      DONE_TRANSITION    = var.done_transition
+      ENRICH_TAGS        = tostring(var.enrich_tags)
+      DESCRIBE_ROLE_NAME = var.describe_role_name
+      TAG_KEYS           = var.tag_keys
     }
   }
 

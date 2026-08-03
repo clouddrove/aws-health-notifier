@@ -4,6 +4,7 @@ from typing import Any
 
 from . import config, events, notifiers
 from . import logging as structured_log
+from .enrichment import tags
 from .state import StateStore
 
 
@@ -14,6 +15,7 @@ def lambda_handler(event: dict[str, Any], context: object) -> dict[str, str]:
         return {"status": "ignored"}
 
     cfg = config.load()
+    ev = tags.with_tags(ev, cfg)
     built = notifiers.build_all(cfg)
     store = StateStore(cfg.table_name)
 

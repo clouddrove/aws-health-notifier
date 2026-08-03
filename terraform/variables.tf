@@ -75,3 +75,27 @@ variable "log_retention_days" {
   type        = number
   default     = 90
 }
+
+variable "enrich_tags" {
+  description = "Enable cross-account instance tag enrichment."
+  type        = bool
+  default     = false
+}
+
+variable "describe_role_name" {
+  description = "Name of the member-account read role for tag enrichment."
+  type        = string
+  default     = "aws-health-notifier-describe"
+}
+
+variable "tag_keys" {
+  description = "Comma-separated instance tag keys to include on tickets."
+  type        = string
+  default     = "Name,Environment"
+}
+
+variable "org_root_id" {
+  description = "Organization root or OU id the StackSet deploys the read role to (required when enrich_tags)."
+  type        = string
+  default     = ""
+}
