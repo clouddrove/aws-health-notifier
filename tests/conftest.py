@@ -22,6 +22,9 @@ def make_config(**overrides: Any) -> Config:
         "priority_map": {},
         "table_name": "t",
         "done_transition": "Done",
+        "enrich_tags": False,
+        "describe_role_name": "aws-health-notifier-describe",
+        "tag_keys": ["Name", "Environment"],
     }
     defaults.update(overrides)
     return Config(**defaults)
