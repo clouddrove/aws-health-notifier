@@ -1,0 +1,48 @@
+name: deploy
+
+# Deploys on push to main after CI passes. Uses short-lived credentials via
+# GitHub OIDC (no static AWS keys). Configure the two repo variables and an IAM
+# role that trusts this repo's OIDC subject before enabling.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # required for OIDC
+  contents: read
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform init
+        run: |
+          terraform -chdir=terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=aws-health-notifier/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}"
+
+      - name: Terraform apply
+        env:
+          TF_VAR_region: ${{ vars.AWS_REGION }}
+          TF_VAR_notifier: ${{ vars.NOTIFIER || 'jira' }}
+          TF_VAR_jira_project_key: ${{ vars.JIRA_PROJECT_KEY }}
+          TF_VAR_jira_secret_arn: ${{ vars.JIRA_SECRET_ARN }}
+        run: terraform -chdir=terraform apply -auto-approve

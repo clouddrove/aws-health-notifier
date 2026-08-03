@@ -1,0 +1,41 @@
+[project]
+name = "aws-health-notifier"
+version = "0.1.0"
+description = "Turn AWS Health EC2 scheduled events into tickets in a pluggable notifier (Jira today)."
+requires-python = ">=3.13"
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "moto[dynamodb,secretsmanager]",
+    "ruff",
+    "mypy",
+    "boto3",
+    "boto3-stubs[dynamodb,secretsmanager]",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+# Do not touch prose or the code examples embedded in design docs.
+extend-exclude = ["docs", ".superpowers"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "N"]
+
+[tool.mypy]
+python_version = "3.13"
+strict = true
+files = ["src", "tests"]
+
+# Tests exercise runtime behavior, not type contracts. Keep src strict; relax
+# strictness on test modules (untyped fixtures, heterogeneous dict literals).
+[[tool.mypy.overrides]]
+module = ["tests.*"]
+disallow_untyped_defs = false
+disallow_incomplete_defs = false
+disable_error_code = ["dict-item", "no-untyped-def"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
+testpaths = ["tests"]
