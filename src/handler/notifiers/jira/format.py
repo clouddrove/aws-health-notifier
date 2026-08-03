@@ -32,7 +32,8 @@ def description(ev: HealthEvent) -> dict[str, Any]:
         _line("Event ARN", ev.event_arn),
     ]
     for iid, pairs in ev.instance_tags.items():
-        content.append(_line(iid, tag_util.format_pairs(pairs)))
+        if pairs:
+            content.append(_line(iid, tag_util.format_pairs(pairs)))
     content.append(
         {"type": "paragraph", "content": [{"type": "text", "text": ev.description or "-"}]}
     )

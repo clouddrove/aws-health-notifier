@@ -21,10 +21,11 @@ def body(ev: HealthEvent) -> str:
         f"**Window**: {ev.start_time} -> {ev.end_time}",
         f"**Event ARN**: {ev.event_arn}",
     ]
-    if ev.instance_tags:
+    tagged = {iid: pairs for iid, pairs in ev.instance_tags.items() if pairs}
+    if tagged:
         lines.append("")
         lines.append("Instance tags:")
-        for iid, pairs in ev.instance_tags.items():
+        for iid, pairs in tagged.items():
             lines.append(f"- **{iid}**: {tag_util.format_pairs(pairs)}")
     lines.append("")
     lines.append(ev.description or "-")
