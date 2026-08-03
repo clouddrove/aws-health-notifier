@@ -46,7 +46,9 @@ resource "aws_cloudformation_stack_set" "describe" {
 resource "aws_cloudformation_stack_set_instance" "describe" {
   count          = var.enrich_tags ? 1 : 0
   stack_set_name = aws_cloudformation_stack_set.describe[0].name
-  region         = var.region
+  # The stack only creates a global IAM role, so the region is not meaningful;
+  # deploy it once per account in the home region.
+  region = var.region
 
   deployment_targets {
     organizational_unit_ids = [var.org_root_id]
