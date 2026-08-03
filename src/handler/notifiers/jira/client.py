@@ -6,11 +6,11 @@ import urllib.error
 import urllib.request
 from typing import Any
 
+from ..base import NotifierError
 
-class JiraError(RuntimeError):
-    def __init__(self, message: str, status: int | None = None) -> None:
-        super().__init__(message)
-        self.status = status
+
+class JiraError(NotifierError):
+    pass
 
 
 class JiraClient:

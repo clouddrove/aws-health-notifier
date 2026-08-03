@@ -9,8 +9,8 @@ from moto import mock_aws
 from handler import notifiers
 from handler.config import Config
 from handler.events import HealthEvent
-from handler.jira import JiraClient
-from handler.notifiers.jira_notifier import JiraNotifier
+from handler.notifiers.jira.client import JiraClient
+from handler.notifiers.jira.notifier import JiraNotifier
 
 CFG = Config(
     "jira",
