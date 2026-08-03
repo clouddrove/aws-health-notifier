@@ -85,11 +85,17 @@ def test_build_github() -> None:
 
     with mock_aws():
         sm = boto3.client("secretsmanager", region_name="us-east-1")
-        arn = sm.create_secret(Name="gh", SecretString=json.dumps({"token": "t"}))["ARN"]
+        arn = sm.create_secret(
+            Name="gh",
+            SecretString=json.dumps({"token": "ghtok", "api_url": "https://ghe.example.com/api/v3"}),
+        )["ARN"]
         cfg = Config("github", "clouddrove/x", "", "Task", "Low", {}, "t", arn, "Done")
         with patch.dict("os.environ", {"AWS_DEFAULT_REGION": "us-east-1"}):
             notifier = notifiers.build(cfg)
         assert isinstance(notifier, GithubNotifier)
+        # the secret's token and api_url are threaded into the client
+        assert notifier._client._token == "ghtok"  # noqa: SLF001
+        assert notifier._client._base == "https://ghe.example.com/api/v3"  # noqa: SLF001
 
 
 def test_build_github_without_repo_raises() -> None:
