@@ -95,6 +95,15 @@ resource "aws_iam_role_policy" "lambda" {
 }
 
 # Lambda
+# Terraform builds the deployment zip from src/ so the handler/ package dir is
+# preserved (entrypoint handler.handler.lambda_handler). No prebuilt zip needed.
+data "archive_file" "lambda" {
+  type        = "zip"
+  source_dir  = "${path.module}/../src"
+  output_path = "${path.module}/../dist/handler.zip"
+  excludes    = ["**/__pycache__/**"]
+}
+
 resource "aws_cloudwatch_log_group" "lambda" {
   name              = "/aws/lambda/${var.name_prefix}"
   retention_in_days = var.log_retention_days
@@ -105,8 +114,8 @@ resource "aws_lambda_function" "handler" {
   role             = aws_iam_role.lambda.arn
   runtime          = "python3.13"
   handler          = "handler.handler.lambda_handler"
-  filename         = "${path.module}/../dist/handler.zip"
-  source_code_hash = filebase64sha256("${path.module}/../dist/handler.zip")
+  filename         = data.archive_file.lambda.output_path
+  source_code_hash = data.archive_file.lambda.output_base64sha256
   timeout          = 30
   memory_size      = 256
 

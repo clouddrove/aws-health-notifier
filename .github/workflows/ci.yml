@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.13"
-      - run: pip install ruff mypy pytest "moto[dynamodb,secretsmanager]" boto3 "boto3-stubs[dynamodb,secretsmanager]"
+      - run: pip install "ruff==0.16.1" "mypy==1.19.1" pytest "moto[dynamodb,secretsmanager]" boto3 "boto3-stubs[dynamodb,secretsmanager]"
       - name: Lint
         run: |
           ruff check .

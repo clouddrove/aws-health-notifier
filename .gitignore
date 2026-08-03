@@ -16,7 +16,7 @@ terraform/.terraform/
 *.tfstate.*
 *.tfvars
 !terraform/terraform.tfvars.example
-.terraform.lock.hcl
+# Keep the provider lock file committed for reproducible deploys.
 
 # SDD scratch
 .superpowers/
