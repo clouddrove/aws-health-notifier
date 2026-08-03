@@ -1,12 +1,10 @@
 name: deploy
 
-# Deploys on push to main after CI passes. Uses short-lived credentials via
-# GitHub OIDC (no static AWS keys). Configure the two repo variables and an IAM
-# role that trusts this repo's OIDC subject before enabling.
+# Manual deploy. Uses short-lived credentials via GitHub OIDC (no static AWS
+# keys). Before running, set the repo variables and an IAM role that trusts this
+# repo's OIDC subject. Run from the Actions tab (Run workflow).
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:
