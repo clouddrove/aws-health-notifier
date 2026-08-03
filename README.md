@@ -24,22 +24,24 @@ Member accounts ──(AWS Health org events)──▶ Central Ops account
                                      ├─ dedup / lifecycle ─▶ DynamoDB (eventArn ▶ ref)
                                      ├─ enrich (event payload only)
                                      ├─ priority map
-                                     └─ Notifier ─▶ Jira REST v3 or GitHub Issues
-                                                │       (create / comment / close)
+                                     └─ Notifiers ─▶ Jira REST v3 and/or GitHub Issues
+                                                │        (create / comment / close)
                                      async failure ─▶ SQS DLQ
 ```
 
-The Lambda is sink-agnostic. It calls a `Notifier` interface; `NOTIFIER=jira|github`
-selects the implementation. Adding a sink is a new subpackage under
-`src/handler/notifiers/` plus one branch in the factory.
+The Lambda is sink-agnostic. `NOTIFIERS` is a comma list (e.g. `jira,github`) and
+the same event fans out to every listed sink. Each sink is tracked independently
+in DynamoDB by `(eventArn, sink)`, so dedup and auto-close are per-sink and a
+partial failure retries only the sink that failed. Adding a sink is a new
+subpackage under `src/handler/notifiers/` plus one branch in the factory.
 
-Lifecycle, driven by the Health `statusCode` and DynamoDB state:
+Lifecycle, per sink, driven by the Health `statusCode` and DynamoDB state:
 
-| Event state | Tracked in DynamoDB | Action |
+| Event state | Sink tracked | Action |
 |---|---|---|
-| open / upcoming | no | create ticket, store `eventArn ▶ ref` |
-| open / upcoming | yes | dedup, no new ticket |
-| closed / resolved | yes, still open | comment + transition to Done, mark closed |
+| open / upcoming | no | create ticket, store `(eventArn, sink) ▶ ref` |
+| open / upcoming | yes | dedup, no new ticket for that sink |
+| closed / resolved | yes, still open | comment + close, mark that sink closed |
 | closed / resolved | yes, already closed | skip (idempotent) |
 | closed / resolved | no | ignore (never created a ticket) |
 
@@ -85,13 +87,15 @@ aws organizations register-delegated-administrator \
 This is an organization-management action, run once outside Terraform. It makes
 member-account EC2 Health events surface on the central account event bus.
 
-### 2. Choose a notifier and create its secret (central account)
+### 2. Choose notifiers and create a secret for each (central account)
 
-Set `NOTIFIER` (Terraform var `notifier`) to `jira` or `github`. Store that
-notifier's credentials in a Secrets Manager secret and pass its ARN as
-`secret_arn`.
+Set `NOTIFIERS` (Terraform var `notifiers`) to a comma list, e.g. `jira`,
+`github`, or `jira,github` to send to both. Each selected notifier reads its own
+Secrets Manager secret (`jira_secret_arn`, `github_secret_arn`), so create one
+secret per notifier you enable.
 
-**Jira** (`NOTIFIER=jira`) needs `JIRA_PROJECT_KEY` and a secret:
+**Jira** (include `jira` in `NOTIFIERS`) needs `JIRA_PROJECT_KEY` and a secret
+passed as `jira_secret_arn`:
 
 ```json
 {
@@ -104,8 +108,8 @@ notifier's credentials in a Secrets Manager secret and pass its ARN as
 The Jira account needs permission to create issues, add comments, and
 transition issues. Priority becomes the Jira priority name.
 
-**GitHub Issues** (`NOTIFIER=github`) needs `GITHUB_REPO` (`owner/repo`) and a
-secret:
+**GitHub Issues** (include `github` in `NOTIFIERS`) needs `GITHUB_REPO`
+(`owner/repo`) and a secret passed as `github_secret_arn`:
 
 ```json
 {
@@ -120,11 +124,11 @@ the notifier creates on the repo if missing.
 
 ```bash
 aws secretsmanager create-secret \
-  --name aws-health-notifier/creds \
-  --secret-string file://creds.json
+  --name aws-health-notifier/jira \
+  --secret-string file://jira.json
 ```
 
-Note the returned ARN for `secret_arn`.
+Note each returned ARN for `jira_secret_arn` / `github_secret_arn`.
 
 ### 3. Deploy
 
@@ -158,10 +162,11 @@ Configure these repo-level Actions variables for deploy:
 | `AWS_DEPLOY_ROLE_ARN` | IAM role the workflow assumes via OIDC |
 | `AWS_REGION` | deployment region |
 | `TF_STATE_BUCKET` | S3 bucket holding Terraform state |
-| `SECRET_ARN` | ARN of the Secrets Manager secret from step 2 |
-| `NOTIFIER` | optional, `jira` or `github`, defaults to `jira` |
-| `JIRA_PROJECT_KEY` | Jira project for tickets (when notifier is jira) |
-| `GITHUB_REPO` | owner/repo for issues (when notifier is github) |
+| `NOTIFIERS` | optional, comma list of `jira` and/or `github`, defaults to `jira` |
+| `JIRA_SECRET_ARN` | ARN of the Jira secret (when notifiers includes jira) |
+| `GITHUB_SECRET_ARN` | ARN of the GitHub secret (when notifiers includes github) |
+| `JIRA_PROJECT_KEY` | Jira project for tickets (when notifiers includes jira) |
+| `GITHUB_REPO` | owner/repo for issues (when notifiers includes github) |
 
 The IAM role's trust policy must allow this repository's OIDC subject
 (`token.actions.githubusercontent.com`).
@@ -170,8 +175,9 @@ The IAM role's trust policy must allow this repository's OIDC subject
 
 | Env var (Lambda) | Terraform variable | Default |
 |---|---|---|
-| `NOTIFIER` | `notifier` | `jira` |
-| `SECRET_ARN` | `secret_arn` | required |
+| `NOTIFIERS` | `notifiers` | `jira` |
+| `JIRA_SECRET_ARN` | `jira_secret_arn` | `""` (required for jira) |
+| `GITHUB_SECRET_ARN` | `github_secret_arn` | `""` (required for github) |
 | `GITHUB_REPO` | `github_repo` | `""` (required for github) |
 | `JIRA_PROJECT_KEY` | `jira_project_key` | `""` (required for jira) |
 | `JIRA_ISSUE_TYPE` | `jira_issue_type` | `Task` |
