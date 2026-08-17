@@ -42,6 +42,6 @@ jobs:
       - run: tflint --chdir=terraform --init
       - run: tflint --chdir=terraform
       - name: Checkov
-        uses: bridgecrewio/checkov-action@v12.3115.0
+        uses: bridgecrewio/checkov-action@v12.3117.0
         with:
           directory: terraform
